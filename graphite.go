@@ -55,7 +55,7 @@ func (g *Graphite) PushF64(metric string, value float64) {
 
 // Push sends pre-formated (string) value to graphite
 func (g *Graphite) Push(metric string, value string) {
-	msg := fmt.Sprintf("%s.%s %s %d", g.prefix, metric, value, time.Now().Unix())
+	msg := fmt.Sprintf("%s.%s %s %d\n", g.prefix, metric, value, time.Now().Unix())
 	select {
 	case g.messages <- msg:
 		atomic.AddInt32(&g.msgCount, 1)
