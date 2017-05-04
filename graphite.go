@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"sync/atomic"
 	"time"
 )
@@ -37,18 +38,24 @@ func New(addr string, sendEvery time.Duration, prefix string, buflen int) (*Grap
 	return &g, nil
 }
 
-func (g *Graphite) pushU64(metric string, value uint64) {
-	msg := fmt.Sprintf("%s.%s %d %d", g.prefix, metric, value, time.Now().Unix())
-	select {
-	case g.messages <- msg:
-		atomic.AddInt32(&g.msgCount, 1)
-	default:
-		log.Println("graphite buffer full!")
-	}
+// PushU64 sends Uint64 value to graphite
+func (g *Graphite) PushU64(metric string, value uint64) {
+	g.Push(metric, strconv.FormatUint(value, 10))
 }
 
-func (g *Graphite) pushF64(metric string, value float64) {
-	msg := fmt.Sprintf("%s.%s %.4f %d", g.prefix, metric, value, time.Now().Unix())
+// PushI64 sends Int64 value to graphite
+func (g *Graphite) PushI64(metric string, value int64) {
+	g.Push(metric, strconv.FormatInt(value, 10))
+}
+
+// PushF64 sends Float64 value to graphite
+func (g *Graphite) PushF64(metric string, value float64) {
+	g.Push(metric, strconv.FormatFloat(value, 'f', 4, 64))
+}
+
+// Push sends pre-formated (string) value to graphite
+func (g *Graphite) Push(metric string, value string) {
+	msg := fmt.Sprintf("%s.%s %s %d", g.prefix, metric, value, time.Now().Unix())
 	select {
 	case g.messages <- msg:
 		atomic.AddInt32(&g.msgCount, 1)
@@ -63,14 +70,17 @@ func (g *Graphite) run() {
 			continue
 		}
 
-		// now := strconv.FormatInt(time.Now().Unix(), 10)
-
 		err := func() error {
 			conn, err := net.DialTCP("tcp", nil, g.addr)
 			if nil != err {
 				return err
 			}
-			defer conn.Close()
+			defer func() {
+				err := conn.Close()
+				if nil != err {
+					log.Println("Error closing TCP connection to graphite: ", err)
+				}
+			}()
 
 			out := bufio.NewWriter(conn)
 
